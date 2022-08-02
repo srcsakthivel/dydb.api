@@ -24,14 +24,19 @@ namespace dydb.api.Controllers
         [HttpGet(Name = "GetWeatherForecast")]
         public async Task<IEnumerable<WeatherForecast>> Get(string zipcode="12345")
         {
-            _logger.LogWarning("Call DB to get the data....Start....");
+            _logger.LogInformation("Call DB to get the data....Start....");
             List<WeatherForecast> items = new List<WeatherForecast>();
+
+            var watch = System.Diagnostics.Stopwatch.StartNew();
 
             items = await _dynamoDBContext
             .QueryAsync<WeatherForecast>(zipcode)
             .GetRemainingAsync();
 
-            _logger.LogWarning("Call DB to get the data....End....");
+            watch.Stop();
+
+            _logger.LogInformation("Call DB to get the data....End....");
+            _logger.LogInformation($"Time Take to call DB to get the data....{watch.ElapsedMilliseconds} ms....");
 
             return items;
         }
@@ -51,7 +56,7 @@ namespace dydb.api.Controllers
 
         private static IEnumerable<WeatherForecast> AddWeatherForecast(string zipcode)
         {
-            return Enumerable.Range(1, 5).Select(index => new WeatherForecast
+            return Enumerable.Range(1, 500).Select(index => new WeatherForecast
             {
                 ZipCode = zipcode,
                 Date = DateTime.Now.AddDays(index).ToString(),
