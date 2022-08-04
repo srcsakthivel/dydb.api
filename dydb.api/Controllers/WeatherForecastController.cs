@@ -1,5 +1,9 @@
+using Amazon.DAX;
 using Amazon.DynamoDBv2.DataModel;
+using Amazon.DynamoDBv2.Model;
+using Amazon.Runtime;
 using Microsoft.AspNetCore.Mvc;
+using System.Linq;
 
 namespace dydb.api.Controllers
 {
@@ -14,24 +18,50 @@ namespace dydb.api.Controllers
 
         private readonly IDynamoDBContext _dynamoDBContext;
         private readonly ILogger<WeatherForecastController> _logger;
+        private readonly IConfiguration _configuration;
 
-        public WeatherForecastController(IDynamoDBContext dynamoDBContext, ILogger<WeatherForecastController> logger)
+        public WeatherForecastController(IDynamoDBContext dynamoDBContext, ILogger<WeatherForecastController> logger, IConfiguration configuration)
         {
             _dynamoDBContext = dynamoDBContext;
             _logger = logger;
+            _configuration = configuration;
         }
 
+
+
         [HttpGet(Name = "GetWeatherForecast")]
-        public async Task<IEnumerable<WeatherForecast>> Get(string zipcode="12345")
+        public async Task<IEnumerable<WeatherForecast>> Get(string zipcode = "12345")
         {
+            DaxClientConfig daxClientConfig = new DaxClientConfig(_configuration["DAXEndpoint"])
+            {
+                AwsCredentials = FallbackCredentialsFactory.GetCredentials()
+            };
+            var daxClient = new ClusterDaxClient(daxClientConfig);
+
             _logger.LogInformation("Call DB to get the data....Start....");
             List<WeatherForecast> items = new List<WeatherForecast>();
 
             var watch = System.Diagnostics.Stopwatch.StartNew();
 
-            items = await _dynamoDBContext
-            .QueryAsync<WeatherForecast>(zipcode)
-            .GetRemainingAsync();
+            var request = new QueryRequest()
+            {
+                TableName = "WeatherForecast",
+                KeyConditionExpression = "ZipCode = :zipcodeval",
+                ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+                {
+                    { ":zipcodeval", new AttributeValue{ S = zipcode } }
+                }
+            };
+
+            var response = daxClient.QueryAsync(request).Result;
+
+            items.AddRange(response.Items.Select(item => new WeatherForecast()
+            {
+                Date = item["Date"].S,
+                Summary = item["Summary"].S,
+                TemperatureC = Int32.Parse(item["TemperatureC"].N),
+                ZipCode = item["ZipCode"].S,
+            }));
 
             watch.Stop();
 

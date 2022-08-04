@@ -1,8 +1,11 @@
+using Amazon.DAX;
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.DataModel;
 using Amazon.Runtime;
 
 var builder = WebApplication.CreateBuilder(args);
+
+
 
 // Add services to the container.
 
@@ -27,6 +30,10 @@ var client = new AmazonDynamoDBClient(credentials, config);
 
 builder.Services.AddSingleton<IAmazonDynamoDB>(client);
 builder.Services.AddSingleton<IDynamoDBContext, DynamoDBContext>();
+
+
+
+
 
 var app = builder.Build();
 
