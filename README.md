@@ -1,109 +1,56 @@
 # aws-sample-dydb-api
 
-## Updates
+## Updates after the DynamoDB implimentation (main branbch code)
 
 - Add the Nuget Package
 
 ```powershell
-dotnet add package AWSSDK.DynamoDBv2
+dotnet add package AWSSDK.DAX.Client
 ```
 
-- Update Program.cs
-  
-```C#
-var credentials = FallbackCredentialsFactory.GetCredentials();
-
-var config = new AmazonDynamoDBConfig()
-{
-    RegionEndpoint = Amazon.RegionEndpoint.USEast1
-};
-var client = new AmazonDynamoDBClient(credentials, config);
-
-builder.Services.AddSingleton<IAmazonDynamoDB>(client);
-builder.Services.AddSingleton<IDynamoDBContext, DynamoDBContext>();
-  
-```
-  
-- Update WeatherForecast.cs
+- Update the Get in [WeatherForecastController.cs](dydb.api/Controllers/WeatherForecastController.cs )
 
 ```C#
-public class WeatherForecast
-    {
-        public string ZipCode { get; set; }
-
-        public string Date { get; set; }
-
-        public int TemperatureC { get; set; }
-
-        public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-
-        public string? Summary { get; set; }
-    }
-```
-
-> Makesure the Model Name and Table Name exact match and Properties and Table Attributes are exact match.
-
-- Add methods for Post and Get in WeatherForecastController.cs
-
-```C#
-
-[ApiController]
-    [Route("[controller]")]
-    public class WeatherForecastController : ControllerBase
-    {
-        private static readonly string[] Summaries = new[]
+[HttpGet(Name = "GetWeatherForecast")]
+        public async Task<IEnumerable<WeatherForecast>> Get(string zipcode = "12345")
         {
-        "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-    };
+            DaxClientConfig daxClientConfig = new DaxClientConfig(_configuration["DAXEndpoint"])
+            {
+                AwsCredentials = FallbackCredentialsFactory.GetCredentials()
+            };
+            var daxClient = new ClusterDaxClient(daxClientConfig);
 
-        private readonly IDynamoDBContext _dynamoDBContext;
-        private readonly ILogger<WeatherForecastController> _logger;
-
-        public WeatherForecastController(IDynamoDBContext dynamoDBContext, ILogger<WeatherForecastController> logger)
-        {
-            _dynamoDBContext = dynamoDBContext;
-            _logger = logger;
-        }
-
-        [HttpGet(Name = "GetWeatherForecast")]
-        public async Task<IEnumerable<WeatherForecast>> Get(string zipcode="12345")
-        {
-            _logger.LogWarning("Call DB to get the data....Start....");
+            _logger.LogInformation("Call DB to get the data....Start....");
             List<WeatherForecast> items = new List<WeatherForecast>();
 
-            items = await _dynamoDBContext
-            .QueryAsync<WeatherForecast>(zipcode)
-            .GetRemainingAsync();
+            var watch = System.Diagnostics.Stopwatch.StartNew();
 
-            _logger.LogWarning("Call DB to get the data....End....");
+            var request = new QueryRequest()
+            {
+                TableName = "WeatherForecast",
+                KeyConditionExpression = "ZipCode = :zipcodeval",
+                ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+                {
+                    { ":zipcodeval", new AttributeValue{ S = zipcode } }
+                }
+            };
+
+            var response = daxClient.QueryAsync(request).Result;
+
+            items.AddRange(response.Items.Select(item => new WeatherForecast()
+            {
+                Date = item["Date"].S,
+                Summary = item["Summary"].S,
+                TemperatureC = Int32.Parse(item["TemperatureC"].N),
+                ZipCode = item["ZipCode"].S,
+            }));
+
+            watch.Stop();
+
+            _logger.LogInformation("Call DB to get the data....End....");
+            _logger.LogInformation($"Time Take to call DB to get the data....{watch.ElapsedMilliseconds} ms....");
 
             return items;
         }
-
-        [HttpPost(Name = "GetWeatherForecast")]
-        public async Task<string> Post(string zipcode)
-        {
-
-            var store = AddWeatherForecast(zipcode);
-            foreach (var item in store)
-            {
-                await _dynamoDBContext.SaveAsync(item);
-            }
-
-            return "Success";
-        }
-
-        private static IEnumerable<WeatherForecast> AddWeatherForecast(string zipcode)
-        {
-            return Enumerable.Range(1, 5).Select(index => new WeatherForecast
-            {
-                ZipCode = zipcode,
-                Date = DateTime.Now.AddDays(index).ToString(),
-                TemperatureC = Random.Shared.Next(-20, 55),
-                Summary = Summaries[Random.Shared.Next(Summaries.Length)]
-            })
-                        .ToArray();
-        }
-    }
 
 ```
