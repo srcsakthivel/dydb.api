@@ -5,49 +5,22 @@
 - Add the Nuget Package
 
 ```powershell
-dotnet add package AWSSDK.DynamoDBv2
+dotnet add package Newtonsoft.Json
+dotnet add package StackExchange.Redis
 ```
 
 - Update Program.cs
   
 ```C#
-var credentials = FallbackCredentialsFactory.GetCredentials();
-
-var config = new AmazonDynamoDBConfig()
-{
-    RegionEndpoint = Amazon.RegionEndpoint.USEast1
-};
-var client = new AmazonDynamoDBClient(credentials, config);
-
-builder.Services.AddSingleton<IAmazonDynamoDB>(client);
-builder.Services.AddSingleton<IDynamoDBContext, DynamoDBContext>();
-  
-```
-  
-- Update WeatherForecast.cs
-
-```C#
-public class WeatherForecast
-    {
-        public string ZipCode { get; set; }
-
-        public string Date { get; set; }
-
-        public int TemperatureC { get; set; }
-
-        public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-
-        public string? Summary { get; set; }
-    }
+builder.Services.AddSingleton<IConnectionMultiplexer>(
+    ConnectionMultiplexer.Connect(builder.Configuration["RedisConnectionString"]));
 ```
 
-> Makesure the Model Name and Table Name exact match and Properties and Table Attributes are exact match.
-
-- Add methods for Post and Get in WeatherForecastController.cs
+- Add methods for Get in WeatherForecastController.cs
 
 ```C#
 
-[ApiController]
+    [ApiController]
     [Route("[controller]")]
     public class WeatherForecastController : ControllerBase
     {
